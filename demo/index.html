@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hledger-codeblock demo</title>
+  <link rel="stylesheet" href="../hledger-codeblock.css">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; }
+    h1   { font-size: 1.4rem; margin-bottom: 4px; }
+    h2   { font-size: 1.1rem; margin: 2em 0 0.5em; color: #555; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .subtitle { color: #888; font-size: 0.9em; margin-bottom: 2em; }
+    .note { background: #f8f9fa; border-left: 3px solid #3498db; padding: 8px 14px; font-size: 0.88em; color: #555; border-radius: 0 4px 4px 0; margin: 1em 0; }
+  </style>
+</head>
+<body>
+
+<h1>hledger-codeblock demo</h1>
+<p class="subtitle">
+  Live hledger reports rendered from fenced code blocks.
+  Edit the queries below and hit ↻ to refresh.
+</p>
+
+<div class="note">
+  Make sure <code>LEDGER_FILE</code> is set in your environment before starting the demo server.
+</div>
+
+<h2>balance — account tree</h2>
+<div class="hlc-block" data-query="balance --depth 2"><span class="hlc-spin">⟳</span></div>
+
+<h2>balance — assets only</h2>
+<div class="hlc-block" data-query="balance assets"><span class="hlc-spin">⟳</span></div>
+
+<h2>register — this month</h2>
+<div class="hlc-block" data-query="register --period thismonth"><span class="hlc-spin">⟳</span></div>
+
+<h2>incomestatement</h2>
+<div class="hlc-block" data-query="incomestatement --period thisyear"><span class="hlc-spin">⟳</span></div>
+
+<h2>balancesheet</h2>
+<div class="hlc-block" data-query="balancesheet"><span class="hlc-spin">⟳</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="../hledger-codeblock.js"></script>
+<script>
+  // Install marked renderer (not strictly needed here since we pre-built the
+  // .hlc-block divs, but shows the pattern for markdown integration).
+  HledgerCodeblock.install(marked);
+
+  // Render all blocks already in the DOM.
+  HledgerCodeblock.renderAll(document.body);
+</script>
+</body>
+</html>
