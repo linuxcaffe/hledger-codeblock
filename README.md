@@ -99,6 +99,26 @@ contentDiv.innerHTML = html;
 HledgerCodeblock.renderAll(contentDiv);
 ```
 
+#### Optional: hledger-web integration
+
+If you run [hledger-web](https://hledger.org/hledger-web.html) alongside your notes app, pass its base URL when installing. Each block will then gain two extra buttons:
+
+- **＋** opens hledger-web's add-transaction form in a named tab
+- **⎋** opens hledger-web filtered to the account pattern from the current query
+
+```js
+HledgerCodeblock.install(marked, {
+    apiEndpoint:   '/api/hledger-query',  // default
+    hledgerWebUrl: 'http://localhost:5002',
+});
+```
+
+hledger-web defaults to port 5000. If that conflicts with another service, start it on a different port:
+
+```bash
+hledger-web --port=5002
+```
+
 ### 3. Write queries in your notes
 
 In any markdown note:

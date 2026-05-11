@@ -59,12 +59,46 @@
         const hdr = document.createElement('div');
         hdr.className = 'hlc-header';
         hdr.innerHTML = `<span class="hlc-meta">${q ? `<code>${esc(q)}</code>` : 'hledger'}</span>`;
-        const btn = document.createElement('button');
-        btn.className = 'hlc-refresh';
-        btn.title = 'Refresh';
-        btn.textContent = '↻';
-        btn.addEventListener('click', refresh);
-        hdr.appendChild(btn);
+
+        const acts = document.createElement('span');
+        acts.className = 'hlc-actions';
+
+        // ＋ open hledger-web add form
+        if (HledgerCodeblock.hledgerWebUrl) {
+            const addBtn = document.createElement('button');
+            addBtn.className = 'hlc-btn hlc-add-btn';
+            addBtn.title = 'Add transaction in hledger-web';
+            addBtn.textContent = '+';
+            addBtn.addEventListener('click', () =>
+                window.open(`${HledgerCodeblock.hledgerWebUrl}/add`, 'hledger-web'));
+            acts.appendChild(addBtn);
+        }
+
+        // ⎋ open hledger-web pre-filtered to this query's account pattern
+        if (HledgerCodeblock.hledgerWebUrl) {
+            const webBtn = document.createElement('button');
+            webBtn.className = 'hlc-btn hlc-web-btn';
+            webBtn.title = 'Open in hledger-web';
+            webBtn.textContent = '⎋';
+            webBtn.addEventListener('click', () => {
+                // Extract a bare account pattern from the query (first non-flag word after the verb)
+                const args    = (q || '').split(/\s+/);
+                const pattern = args.slice(1).find(a => !a.startsWith('-')) || '';
+                const hash    = pattern ? `#${encodeURIComponent(pattern)}` : '';
+                window.open(`${HledgerCodeblock.hledgerWebUrl}${hash}`, 'hledger-web');
+            });
+            acts.appendChild(webBtn);
+        }
+
+        // ↻ refresh
+        const refBtn = document.createElement('button');
+        refBtn.className = 'hlc-btn hlc-refresh';
+        refBtn.title = 'Refresh';
+        refBtn.textContent = '↻';
+        refBtn.addEventListener('click', refresh);
+        acts.appendChild(refBtn);
+
+        hdr.appendChild(acts);
         el.appendChild(hdr);
     }
 
@@ -194,7 +228,8 @@
     // ── Public API ─────────────────────────────────────────────────────────
 
     const HledgerCodeblock = {
-        apiEndpoint: '/api/hledger-query',
+        apiEndpoint:    '/api/hledger-query',
+        hledgerWebUrl:  null,   // e.g. 'http://localhost:5002' — enables ＋ and ⎋ buttons
 
         /**
          * Register the "hledger" fenced-block renderer with marked.js.
@@ -202,10 +237,15 @@
          *
          * @param {object} markedInstance  The `marked` global or import.
          * @param {object} [options]
-         * @param {string} [options.apiEndpoint]  URL of the backend endpoint.
+         * @param {string} [options.apiEndpoint]   URL of the backend query endpoint.
+         * @param {string} [options.hledgerWebUrl] Base URL of hledger-web, e.g.
+         *                                         'http://localhost:5002'. When set,
+         *                                         each block gains a ＋ (add transaction)
+         *                                         and ⎋ (open in hledger-web) button.
          */
         install(markedInstance, options = {}) {
-            if (options.apiEndpoint) this.apiEndpoint = options.apiEndpoint;
+            if (options.apiEndpoint)   this.apiEndpoint   = options.apiEndpoint;
+            if (options.hledgerWebUrl) this.hledgerWebUrl = options.hledgerWebUrl;
             const self = this;
             markedInstance.use({
                 renderer: {

@@ -50,7 +50,9 @@
 .hlc-meta      { font-size: 0.78em; color: var(--hlc-dim); }
 .hlc-meta code { font-family: var(--hlc-font-mono); }
 
-.hlc-refresh {
+.hlc-actions { display: flex; align-items: center; gap: 2px; }
+
+.hlc-btn {
     background: none;
     border: none;
     cursor: pointer;
@@ -61,7 +63,14 @@
     line-height: 1;
     transition: color 0.12s, background 0.12s;
 }
-.hlc-refresh:hover { color: var(--hlc-text); background: var(--hlc-bg-alt); }
+.hlc-btn:hover { color: var(--hlc-text); background: var(--hlc-bg-alt); }
+
+.hlc-add-btn { font-size: 1.1em; font-weight: bold; }
+.hlc-web-btn { font-size: 0.95em; }
+
+/* keep the old class working for anyone who targeted it directly */
+.hlc-refresh { }
+
 
 /* ── Table ────────────────────────────────────────────────────────────── */
 .hlc-table {
