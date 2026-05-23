@@ -18,7 +18,11 @@ incomestatement --period thisyear
 ```
 ````
 
-Each block renders with a **↻ refresh button** that re-runs the query live without reloading the page.
+Each block renders with a header bar containing:
+
+- **+** — open an inline add-transaction form (no hledger-web required)
+- **⎋** — open in hledger-web, pre-filtered to the block's account pattern *(optional, see below)*
+- **↻** — re-run the query live without reloading the page
 
 ---
 
@@ -50,8 +54,9 @@ Two small pieces:
 1. **`hledger-codeblock.js`** — a [marked.js](https://marked.js.org/) renderer extension.  
    Intercepts ` ```hledger ``` ` blocks during markdown parsing, replaces them with placeholder `<div>` elements, then fetches live data from the backend and renders the appropriate table type.
 
-2. **`flask_route.py`** — a single Flask route (`/api/hledger-query`).  
-   Receives the query string, runs `hledger <args> --output-format json`, and returns structured JSON. Write commands are blocked. Only read-only report commands are permitted.
+2. **`flask_route.py`** — two Flask routes.  
+   `/api/hledger-query` runs read-only hledger reports and returns structured JSON.  
+   `/api/hledger-add` appends a new transaction, validates it with `hledger check`, and rolls back on error.
 
 No database. No intermediate format. Just hledger's own JSON output, rendered client-side.
 
@@ -62,9 +67,10 @@ No database. No intermediate format. Just hledger's own JSON output, rendered cl
 ### Requirements
 
 - [hledger](https://hledger.org/install.html) on `$PATH`
-- `LEDGER_FILE` environment variable set (or pass `-f yourfile.journal` in each query)
 - Python 3 + [Flask](https://flask.palletsprojects.com/) for the backend
 - [marked.js](https://marked.js.org/) v4+ for markdown rendering
+
+`LEDGER_FILE` in the environment is optional. If unset, hledger falls back to `~/.hledger.journal` — its own default behaviour.
 
 ### 1. Backend (Flask)
 
@@ -75,7 +81,7 @@ from flask_route import hledger_bp
 app.register_blueprint(hledger_bp)
 ```
 
-Or just copy the `hledger_query()` function directly into your existing `app.py`.
+Or copy the route functions directly into your existing `app.py`.
 
 ### 2. Frontend
 
@@ -99,24 +105,14 @@ contentDiv.innerHTML = html;
 HledgerCodeblock.renderAll(contentDiv);
 ```
 
-#### Optional: hledger-web integration
-
-If you run [hledger-web](https://hledger.org/hledger-web.html) alongside your notes app, pass its base URL when installing. Each block will then gain two extra buttons:
-
-- **＋** opens hledger-web's add-transaction form in a named tab
-- **⎋** opens hledger-web filtered to the account pattern from the current query
+All options and their defaults:
 
 ```js
 HledgerCodeblock.install(marked, {
-    apiEndpoint:   '/api/hledger-query',  // default
-    hledgerWebUrl: 'http://localhost:5002',
+    apiEndpoint:   '/api/hledger-query',  // read endpoint
+    addEndpoint:   '/api/hledger-add',    // write endpoint
+    hledgerWebUrl: null,                  // enables ⎋ button when set
 });
-```
-
-hledger-web defaults to port 5000. If that conflicts with another service, start it on a different port:
-
-```bash
-hledger-web --port=5002
 ```
 
 ### 3. Write queries in your notes
@@ -139,14 +135,59 @@ register --period thisweek
 
 ---
 
+## Adding transactions
+
+Every block has a **+** button that opens an inline add form — no hledger-web required.
+
+The form has date, description, and two posting rows. **The second amount auto-fills with the negative of the first** as you type, since double-entry transactions must balance. You can override it, leave it blank (hledger infers the balancing amount), or add more posting rows with **+ posting**.
+
+On save, the transaction is appended to the ledger file and validated with `hledger check`. If validation fails, the append is rolled back and the error is shown inline.
+
+---
+
+## Targeting a specific ledger file
+
+Prefix the query with a file path and both the block and its add form will use that file instead of `LEDGER_FILE` or the default:
+
+````markdown
+```hledger
+~/finances/personal.journal
+register expenses --period thismonth
+```
+````
+
+The path (anything starting with `~` or `/`) is extracted before the rest of the query is parsed. All file paths are validated to stay within your home directory.
+
+---
+
+## Optional: hledger-web integration
+
+If you run [hledger-web](https://hledger.org/hledger-web.html) alongside your notes app, pass its base URL when installing. Each block gains a **⎋** button that opens hledger-web pre-filtered to the account pattern from the current query.
+
+```js
+HledgerCodeblock.install(marked, {
+    hledgerWebUrl: 'http://localhost:5002',
+});
+```
+
+hledger-web defaults to port 5000. If that conflicts with another service, start it on a different port:
+
+```bash
+hledger-web --port=5002
+```
+
+---
+
 ## Demo
 
 ```bash
 git clone https://github.com/linuxcaffe/hledger-codeblock
 cd hledger-codeblock/demo
-LEDGER_FILE=~/finances/main.journal python app.py
+python app.py
 # open http://localhost:5050
 ```
+
+Set `LEDGER_FILE` or pass a path in the demo's example blocks. If neither is set, hledger looks for `~/.hledger.journal`.
 
 ---
 
@@ -177,19 +218,18 @@ Dark mode is supported out of the box — add `data-theme="dark"` to your `<html
 
 ## Security
 
-The backend endpoint is **read-only by design**:
+Both endpoints are designed for **personal, local, or trusted-network use** — the same threat model as hledger-web itself.
 
-- Only a fixed allowlist of hledger report commands is permitted (`balance`, `register`, `incomestatement`, `balancesheet`, `cashflow`, `accounts`, `prices`, `commodities`, `stats`, `tags`, `files`)
-- The endpoint calls `hledger` via `subprocess.run` with `shell=False` — no shell injection is possible
-- Path traversal via `--file` flags is blocked
-
-This is intended for **personal, local, or trusted-network use** — the same threat model as hledger-web.
+- Only an explicit allowlist of hledger report commands is permitted on the query endpoint
+- Both endpoints call `hledger` via `subprocess.run` with `shell=False` — no shell injection is possible
+- All file paths (positional shorthand and `-f`/`--file` flags) are resolved and validated to stay within the user's home directory
+- The write endpoint appends to an existing file only; it never creates files or accepts absolute paths outside `~`
 
 ---
 
 ## Origin
 
-Built as part of [nb-web](https://github.com/linuxcaffe/nb-web), a web UI for the [nb](https://github.com/xwmx/nb) notes CLI. Extracted here as a standalone component because it felt too useful to keep to itself.
+Built as part of [nb-web](https://codeberg.org/linuxcaffe/nb-web), a web UI for the [nb](https://github.com/xwmx/nb) notes CLI. Extracted here as a standalone component because it felt too useful to keep to itself.
 
 The pattern was inspired by [obsidian-tw-task-wiki](https://github.com/SntTGR/obsidian-tw-task-wiki), which does the same thing for Taskwarrior inside Obsidian. To our knowledge, this is the first live hledger query renderer for a markdown notes environment.
 
