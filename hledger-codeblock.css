@@ -67,6 +67,7 @@
 
 .hlc-add-btn { font-size: 1.1em; font-weight: bold; }
 .hlc-web-btn { font-size: 0.95em; }
+.hlc-btn-active { color: var(--hlc-accent) !important; }
 
 /* keep the old class working for anyone who targeted it directly */
 .hlc-refresh { }
@@ -147,6 +148,61 @@
     overflow-x: auto;
     white-space: pre;
 }
+
+/* ── Add form ─────────────────────────────────────────────────────────── */
+.hlc-addform {
+    background: var(--hlc-bg-alt);
+    border: 1px solid var(--hlc-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 0.85em;
+}
+.hlc-addform-top {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.hlc-inp {
+    background: var(--hlc-bg);
+    border: 1px solid var(--hlc-border);
+    border-radius: 4px;
+    color: var(--hlc-text);
+    font-size: 0.92em;
+    padding: 4px 8px;
+    outline: none;
+}
+.hlc-inp:focus { border-color: var(--hlc-accent); }
+.hlc-date-inp  { width: 9em; flex-shrink: 0; }
+.hlc-desc-inp  { flex: 1; }
+
+.hlc-postings { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.hlc-posting-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.hlc-acc-inp { flex: 2; font-family: var(--hlc-font-mono); }
+.hlc-amt-inp { flex: 1; font-family: var(--hlc-font-mono); text-align: right; }
+.hlc-rm-row  { flex-shrink: 0; opacity: 0.5; font-size: 0.8em; padding: 2px 5px; }
+.hlc-rm-row:hover { opacity: 1; }
+
+.hlc-addform-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.hlc-btn-primary {
+    background: var(--hlc-accent);
+    color: #fff;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+.hlc-btn-primary:hover { opacity: 0.85; color: #fff; background: var(--hlc-accent); }
+.hlc-form-status { font-size: 0.88em; color: var(--hlc-muted); margin-left: 4px; }
 
 /* ── Loading spinner ──────────────────────────────────────────────────── */
 .hlc-spin {

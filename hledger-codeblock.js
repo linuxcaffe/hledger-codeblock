@@ -18,6 +18,14 @@
  *   cashflow / cf              → sectioned
  *   anything else              → plain-text <pre> fallback
  *
+ * File path shorthand: prefix the query with a ledger file path and the
+ * block (including the add form) will use that file instead of LEDGER_FILE:
+ *
+ *   ```hledger
+ *   ~/finances/alt.journal
+ *   register thismonth
+ *   ```
+ *
  * https://github.com/linuxcaffe/hledger-codeblock
  */
 
@@ -44,7 +52,7 @@
             const sign = qty < 0 ? '−' : '';   // proper minus sign
             return a.astyle?.ascommodityside === 'L'
                 ? `${sign}${sym}${abs}`
-                : `${sign}${abs}${sym ? ' ' + sym : ''}`;
+                : `${sign}${abs}${sym ? ' ' + sym : ''}`;
         }).join(' + ');
     }
 
@@ -54,7 +62,124 @@
         return total < -0.001 ? 'hlc-neg' : total > 0.001 ? 'hlc-pos' : 'hlc-zero';
     }
 
-    // Build the header bar (query label + refresh button).
+    // Negate a user-typed amount string: "$10" → "-$10", "-$10" → "$10".
+    function negateAmount(s) {
+        s = (s || '').trim();
+        return s.startsWith('-') ? s.slice(1).trim() : s ? '-' + s : '';
+    }
+
+    // ── Add form ───────────────────────────────────────────────────────────
+
+    function showAddForm(el, trigger) {
+        const existing = el.querySelector('.hlc-addform');
+        if (existing) {
+            existing.remove();
+            trigger.classList.remove('hlc-btn-active');
+            return;
+        }
+        trigger.classList.add('hlc-btn-active');
+
+        const today = new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD
+
+        function makePostingRow() {
+            const row = document.createElement('div');
+            row.className = 'hlc-posting-row';
+            row.innerHTML = `
+                <input type="text" class="hlc-inp hlc-acc-inp" placeholder="account:name" autocomplete="off" spellcheck="false">
+                <input type="text" class="hlc-inp hlc-amt-inp" placeholder="amount (blank to auto-balance)">
+                <button class="hlc-btn hlc-rm-row" title="Remove posting">✕</button>`;
+            row.querySelector('.hlc-rm-row').addEventListener('click', () => {
+                if (form.querySelectorAll('.hlc-posting-row').length > 2) row.remove();
+            });
+            return row;
+        }
+
+        const form = document.createElement('div');
+        form.className = 'hlc-addform';
+        form.innerHTML = `
+            <div class="hlc-addform-top">
+                <input type="date" class="hlc-inp hlc-date-inp" value="${today}">
+                <input type="text" class="hlc-inp hlc-desc-inp" placeholder="Description" autocomplete="off">
+            </div>
+            <div class="hlc-postings"></div>
+            <div class="hlc-addform-footer">
+                <button class="hlc-btn hlc-add-row">+ posting</button>
+                <button class="hlc-btn hlc-btn-primary hlc-save-btn">Save</button>
+                <button class="hlc-btn hlc-cancel-btn">Cancel</button>
+                <span class="hlc-form-status"></span>
+            </div>`;
+
+        const postingsEl = form.querySelector('.hlc-postings');
+        const row1 = makePostingRow();
+        const row2 = makePostingRow();
+        postingsEl.appendChild(row1);
+        postingsEl.appendChild(row2);
+
+        // Auto-balance: row2 mirrors the negative of row1 until the user edits it.
+        const amt1 = row1.querySelector('.hlc-amt-inp');
+        const amt2 = row2.querySelector('.hlc-amt-inp');
+        amt1.addEventListener('input', () => {
+            if (!amt2._userEdited) amt2.value = negateAmount(amt1.value);
+        });
+        amt2.addEventListener('input', () => {
+            amt2._userEdited = amt2.value !== '' && amt2.value !== negateAmount(amt1.value);
+        });
+
+        form.querySelector('.hlc-add-row').addEventListener('click', () =>
+            postingsEl.appendChild(makePostingRow()));
+
+        function dismiss() {
+            form.remove();
+            trigger.classList.remove('hlc-btn-active');
+        }
+
+        form.querySelector('.hlc-cancel-btn').addEventListener('click', dismiss);
+        form.addEventListener('keydown', e => { if (e.key === 'Escape') dismiss(); });
+
+        form.querySelector('.hlc-save-btn').addEventListener('click', async () => {
+            const status   = form.querySelector('.hlc-form-status');
+            const date     = form.querySelector('.hlc-date-inp').value;
+            const desc     = form.querySelector('.hlc-desc-inp').value.trim();
+            const postings = [...form.querySelectorAll('.hlc-posting-row')].map(r => ({
+                account: r.querySelector('.hlc-acc-inp').value.trim(),
+                amount:  r.querySelector('.hlc-amt-inp').value.trim(),
+            })).filter(p => p.account);
+
+            if (!date || !desc) { status.textContent = 'Date and description required'; return; }
+            if (!postings.length) { status.textContent = 'At least one posting required'; return; }
+
+            status.textContent = 'Saving…';
+            status.style.color = '';
+            try {
+                const hlFile = el.dataset.hlFile || '';
+                const r = await fetch(HledgerCodeblock.addEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date, description: desc, postings,
+                        ...(hlFile && { file: hlFile }),
+                    }),
+                });
+                const d = await r.json();
+                if (d.error) {
+                    status.textContent = '✗ ' + d.error;
+                    status.style.color = 'var(--hlc-neg)';
+                } else {
+                    dismiss();
+                    await HledgerCodeblock._reload(el);
+                }
+            } catch (e) {
+                status.textContent = '✗ ' + e.message;
+                status.style.color = 'var(--hlc-neg)';
+            }
+        });
+
+        el.querySelector('.hlc-header').insertAdjacentElement('afterend', form);
+        form.querySelector('.hlc-desc-inp')?.focus();
+    }
+
+    // ── Header bar ─────────────────────────────────────────────────────────
+
     function buildHeader(el, q, refresh) {
         const hdr = document.createElement('div');
         hdr.className = 'hlc-header';
@@ -63,25 +188,21 @@
         const acts = document.createElement('span');
         acts.className = 'hlc-actions';
 
-        // ＋ open hledger-web add form
-        if (HledgerCodeblock.hledgerWebUrl) {
-            const addBtn = document.createElement('button');
-            addBtn.className = 'hlc-btn hlc-add-btn';
-            addBtn.title = 'Add transaction in hledger-web';
-            addBtn.textContent = '+';
-            addBtn.addEventListener('click', () =>
-                window.open(`${HledgerCodeblock.hledgerWebUrl}/add`, 'hledger-web'));
-            acts.appendChild(addBtn);
-        }
+        // + always shows — opens inline add form
+        const addBtn = document.createElement('button');
+        addBtn.className = 'hlc-btn hlc-add-btn';
+        addBtn.title = 'Add transaction';
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', () => showAddForm(el, addBtn));
+        acts.appendChild(addBtn);
 
-        // ⎋ open hledger-web pre-filtered to this query's account pattern
+        // ⎋ only when hledger-web URL is configured
         if (HledgerCodeblock.hledgerWebUrl) {
             const webBtn = document.createElement('button');
             webBtn.className = 'hlc-btn hlc-web-btn';
             webBtn.title = 'Open in hledger-web';
             webBtn.textContent = '⎋';
             webBtn.addEventListener('click', () => {
-                // Extract a bare account pattern from the query (first non-flag word after the verb)
                 const args    = (q || '').split(/\s+/);
                 const pattern = args.slice(1).find(a => !a.startsWith('-')) || '';
                 const hash    = pattern ? `#${encodeURIComponent(pattern)}` : '';
@@ -228,8 +349,9 @@
     // ── Public API ─────────────────────────────────────────────────────────
 
     const HledgerCodeblock = {
-        apiEndpoint:    '/api/hledger-query',
-        hledgerWebUrl:  null,   // e.g. 'http://localhost:5002' — enables ＋ and ⎋ buttons
+        apiEndpoint:   '/api/hledger-query',
+        addEndpoint:   '/api/hledger-add',
+        hledgerWebUrl: null,   // e.g. 'http://localhost:5002' — enables ⎋ button
 
         /**
          * Register the "hledger" fenced-block renderer with marked.js.
@@ -238,15 +360,16 @@
          * @param {object} markedInstance  The `marked` global or import.
          * @param {object} [options]
          * @param {string} [options.apiEndpoint]   URL of the backend query endpoint.
+         * @param {string} [options.addEndpoint]   URL of the backend write endpoint.
          * @param {string} [options.hledgerWebUrl] Base URL of hledger-web, e.g.
          *                                         'http://localhost:5002'. When set,
-         *                                         each block gains a ＋ (add transaction)
-         *                                         and ⎋ (open in hledger-web) button.
+         *                                         each block gains a ⎋ (open in
+         *                                         hledger-web) button.
          */
         install(markedInstance, options = {}) {
             if (options.apiEndpoint)   this.apiEndpoint   = options.apiEndpoint;
+            if (options.addEndpoint)   this.addEndpoint   = options.addEndpoint;
             if (options.hledgerWebUrl) this.hledgerWebUrl = options.hledgerWebUrl;
-            const self = this;
             markedInstance.use({
                 renderer: {
                     code({ text, lang }) {
@@ -280,6 +403,8 @@
                     el.innerHTML = `<span class="hlc-error">⚠ ${esc(d.error)}</span>`;
                     return;
                 }
+                // Store resolved file path so the add form targets the same file.
+                el.dataset.hlFile = d.file || '';
                 el.innerHTML = '';
                 if (d.text != null) { renderPre(el, d.text, q); return; }
                 const cmd = (d.cmd || 'balance').toLowerCase();
