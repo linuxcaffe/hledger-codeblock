@@ -20,8 +20,9 @@ incomestatement --period thisyear
 
 Each block renders with a header bar containing:
 
+- **hledger** — the block name label; click to launch hledger-web or a TUI app *(optional, see below)*
+- **[N]** — row/transaction count badge
 - **+** — open an inline add-transaction form (no hledger-web required)
-- **⎋** — open in hledger-web, pre-filtered to the block's account pattern *(optional, see below)*
 - **↻** — re-run the query live without reloading the page
 
 ---
@@ -109,9 +110,11 @@ All options and their defaults:
 
 ```js
 HledgerCodeblock.install(marked, {
-    apiEndpoint:   '/api/hledger-query',  // read endpoint
-    addEndpoint:   '/api/hledger-add',    // write endpoint
-    hledgerWebUrl: null,                  // enables ⎋ button when set
+    apiEndpoint:    '/api/hledger-query',  // read endpoint
+    addEndpoint:    '/api/hledger-add',    // write endpoint
+    hledgerWebUrl:  null,    // base URL of hledger-web — name click opens in browser
+    hledgerCmd:     null,    // command passed to terminalRunner (e.g. 'hledger ui')
+    terminalRunner: null,    // function(cmd) — runs cmd in your terminal widget
 });
 ```
 
@@ -160,9 +163,13 @@ The path (anything starting with `~` or `/`) is extracted before the rest of the
 
 ---
 
-## Optional: hledger-web integration
+## Optional: launching hledger-web or a TUI
 
-If you run [hledger-web](https://hledger.org/hledger-web.html) alongside your notes app, pass its base URL when installing. Each block gains a **⎋** button that opens hledger-web pre-filtered to the account pattern from the current query.
+Clicking the **hledger** label in the block header can launch an external app. There are two modes — pick one.
+
+### Web mode
+
+Pass `hledgerWebUrl` and clicking the label opens hledger-web in a new browser tab, pre-filtered to the account pattern from the current query:
 
 ```js
 HledgerCodeblock.install(marked, {
@@ -170,11 +177,24 @@ HledgerCodeblock.install(marked, {
 });
 ```
 
-hledger-web defaults to port 5000. If that conflicts with another service, start it on a different port:
+hledger-web defaults to port 5000. If that conflicts with another service, start it on a different port — and add `--serve` to stop it auto-opening a browser window of its own:
 
 ```bash
-hledger-web --port=5002
+hledger-web --port 5002 --serve
 ```
+
+### Terminal mode
+
+Pass `hledgerCmd` and a `terminalRunner` callback and clicking the label runs the command in your app's terminal widget instead. The callback receives the command string and does whatever your app needs — open a panel, send to a PTY, etc.:
+
+```js
+HledgerCodeblock.install(marked, {
+    hledgerCmd:     'hledger ui',
+    terminalRunner: (cmd) => myTerminal.run(cmd),
+});
+```
+
+`terminalRunner` takes priority over `hledgerWebUrl` if both are set.
 
 ---
 
