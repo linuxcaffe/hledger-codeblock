@@ -180,15 +180,35 @@
 
     // ── Header bar ─────────────────────────────────────────────────────────
 
-    function buildHeader(el, q, refresh) {
+    function buildHeader(el, q, refresh, count) {
         const hdr = document.createElement('div');
         hdr.className = 'hlc-header';
-        hdr.innerHTML = `<span class="hlc-meta">${q ? `<code>${esc(q)}</code>` : 'hledger'}</span>`;
+
+        const countHtml  = count != null ? `<span class="hlc-count">${count}</span>` : '';
+        const filterHtml = q ? ` <code>${esc(q)}</code>` : '';
+        const hasTerminal = HledgerCodeblock.terminalRunner && HledgerCodeblock.hledgerCmd;
+        const hasWeb      = HledgerCodeblock.hledgerWebUrl;
+        const nameTitle   = hasTerminal ? 'Run in terminal'
+                          : hasWeb      ? 'Open in hledger-web'
+                          :               '';
+        hdr.innerHTML = `<span class="hlc-meta"><span class="hlc-name${hasTerminal || hasWeb ? ' hlc-name-link' : ''}"${nameTitle ? ` title="${esc(nameTitle)}"` : ''}>hledger</span>${countHtml}${filterHtml}</span>`;
+
+        const nameEl = hdr.querySelector('.hlc-name');
+        if (hasTerminal) {
+            nameEl.addEventListener('click', () =>
+                HledgerCodeblock.terminalRunner(HledgerCodeblock.hledgerCmd));
+        } else if (hasWeb) {
+            nameEl.addEventListener('click', () => {
+                const args    = (q || '').split(/\s+/);
+                const pattern = args.slice(1).find(a => !a.startsWith('-')) || '';
+                const hash    = pattern ? `#${encodeURIComponent(pattern)}` : '';
+                window.open(`${HledgerCodeblock.hledgerWebUrl}${hash}`, 'hledger-web');
+            });
+        }
 
         const acts = document.createElement('span');
         acts.className = 'hlc-actions';
 
-        // + always shows — opens inline add form
         const addBtn = document.createElement('button');
         addBtn.className = 'hlc-btn hlc-add-btn';
         addBtn.title = 'Add transaction';
@@ -196,22 +216,6 @@
         addBtn.addEventListener('click', () => showAddForm(el, addBtn));
         acts.appendChild(addBtn);
 
-        // ⎋ only when hledger-web URL is configured
-        if (HledgerCodeblock.hledgerWebUrl) {
-            const webBtn = document.createElement('button');
-            webBtn.className = 'hlc-btn hlc-web-btn';
-            webBtn.title = 'Open in hledger-web';
-            webBtn.textContent = '⎋';
-            webBtn.addEventListener('click', () => {
-                const args    = (q || '').split(/\s+/);
-                const pattern = args.slice(1).find(a => !a.startsWith('-')) || '';
-                const hash    = pattern ? `#${encodeURIComponent(pattern)}` : '';
-                window.open(`${HledgerCodeblock.hledgerWebUrl}${hash}`, 'hledger-web');
-            });
-            acts.appendChild(webBtn);
-        }
-
-        // ↻ refresh
         const refBtn = document.createElement('button');
         refBtn.className = 'hlc-btn hlc-refresh';
         refBtn.title = 'Refresh';
@@ -232,7 +236,7 @@
     function renderBalance(el, data, q) {
         const rows   = Array.isArray(data?.[0]) ? data[0] : [];
         const totals = Array.isArray(data?.[1]) ? data[1] : [];
-        buildHeader(el, q, () => HledgerCodeblock._reload(el));
+        buildHeader(el, q, () => HledgerCodeblock._reload(el), rows.length);
 
         if (!rows.length) {
             el.insertAdjacentHTML('beforeend', '<div class="hlc-empty">No accounts matched</div>');
@@ -264,7 +268,8 @@
     // Rows with null date are continuation postings of the same transaction.
     function renderRegister(el, data, q) {
         const rows = Array.isArray(data) ? data : [];
-        buildHeader(el, q, () => HledgerCodeblock._reload(el));
+        const txnCount = rows.filter(([date]) => date != null).length;
+        buildHeader(el, q, () => HledgerCodeblock._reload(el), txnCount);
 
         if (!rows.length) {
             el.insertAdjacentHTML('beforeend', '<div class="hlc-empty">No transactions matched</div>');
@@ -298,7 +303,8 @@
     // data: { cbrSubreports: [[sectionName, {prRows, prTotals}, negate], ...] }
     function renderSectioned(el, data, q) {
         const subreports = data?.cbrSubreports || [];
-        buildHeader(el, q, () => HledgerCodeblock._reload(el));
+        const rowCount = subreports.reduce((n, [, r]) => n + (r?.prRows?.length || 0), 0);
+        buildHeader(el, q, () => HledgerCodeblock._reload(el), rowCount || null);
 
         for (const [sectionName, report] of subreports) {
             const rows   = report?.prRows   || [];
@@ -336,7 +342,7 @@
 
     // Plain-text fallback (commands that don't emit JSON)
     function renderPre(el, text, q) {
-        buildHeader(el, q, () => HledgerCodeblock._reload(el));
+        buildHeader(el, q, () => HledgerCodeblock._reload(el), null);
         el.insertAdjacentHTML('beforeend', `<pre class="hlc-pre">${esc(text)}</pre>`);
     }
 
@@ -349,9 +355,11 @@
     // ── Public API ─────────────────────────────────────────────────────────
 
     const HledgerCodeblock = {
-        apiEndpoint:   '/api/hledger-query',
-        addEndpoint:   '/api/hledger-add',
-        hledgerWebUrl: null,   // e.g. 'http://localhost:5002' — enables ⎋ button
+        apiEndpoint:    '/api/hledger-query',
+        addEndpoint:    '/api/hledger-add',
+        hledgerWebUrl:  null,   // e.g. 'http://localhost:5002' — name click opens in browser
+        hledgerCmd:     null,   // e.g. 'hledger ui' — command passed to terminalRunner
+        terminalRunner: null,   // function(cmd) — if set, name click runs cmd in your terminal
 
         /**
          * Register the "hledger" fenced-block renderer with marked.js.
@@ -359,17 +367,25 @@
          *
          * @param {object} markedInstance  The `marked` global or import.
          * @param {object} [options]
-         * @param {string} [options.apiEndpoint]   URL of the backend query endpoint.
-         * @param {string} [options.addEndpoint]   URL of the backend write endpoint.
-         * @param {string} [options.hledgerWebUrl] Base URL of hledger-web, e.g.
-         *                                         'http://localhost:5002'. When set,
-         *                                         each block gains a ⎋ (open in
-         *                                         hledger-web) button.
+         * @param {string}   [options.apiEndpoint]    URL of the backend query endpoint.
+         * @param {string}   [options.addEndpoint]    URL of the backend write endpoint.
+         * @param {string}   [options.hledgerWebUrl]  Base URL of hledger-web (e.g.
+         *                                            'http://localhost:5002'). Clicking the
+         *                                            "hledger" label opens this URL.
+         * @param {string}   [options.hledgerCmd]     Command to pass to terminalRunner
+         *                                            (e.g. 'hledger ui').
+         * @param {function} [options.terminalRunner] Callback: (cmd) => void. When set,
+         *                                            clicking "hledger" calls this instead
+         *                                            of opening the web URL. Lets the host
+         *                                            app run the command in its own terminal
+         *                                            widget. Takes priority over hledgerWebUrl.
          */
         install(markedInstance, options = {}) {
-            if (options.apiEndpoint)   this.apiEndpoint   = options.apiEndpoint;
-            if (options.addEndpoint)   this.addEndpoint   = options.addEndpoint;
-            if (options.hledgerWebUrl) this.hledgerWebUrl = options.hledgerWebUrl;
+            if (options.apiEndpoint)    this.apiEndpoint    = options.apiEndpoint;
+            if (options.addEndpoint)    this.addEndpoint    = options.addEndpoint;
+            if (options.hledgerWebUrl)  this.hledgerWebUrl  = options.hledgerWebUrl;
+            if (options.hledgerCmd)     this.hledgerCmd     = options.hledgerCmd;
+            if (options.terminalRunner) this.terminalRunner = options.terminalRunner;
             markedInstance.use({
                 renderer: {
                     code({ text, lang }) {

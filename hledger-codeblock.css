@@ -44,11 +44,17 @@
 .hlc-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 4px;
     margin-bottom: 6px;
 }
-.hlc-meta      { font-size: 0.78em; color: var(--hlc-dim); }
-.hlc-meta code { font-family: var(--hlc-font-mono); }
+.hlc-meta          { flex: 1; font-size: 0.78em; color: var(--hlc-dim); }
+.hlc-meta code     { font-family: var(--hlc-font-mono); }
+.hlc-name          { font-weight: 600; color: var(--hlc-muted); margin-right: 4px; }
+.hlc-name-link     { cursor: pointer; }
+.hlc-name-link:hover { color: var(--hlc-accent); }
+.hlc-count         { display: inline-block; font-size: 0.88em; color: var(--hlc-dim);
+                     background: var(--hlc-bg-alt); border-radius: 8px;
+                     padding: 0 5px; margin: 0 4px; line-height: 1.5; }
 
 .hlc-actions { display: flex; align-items: center; gap: 2px; }
 
@@ -66,7 +72,6 @@
 .hlc-btn:hover { color: var(--hlc-text); background: var(--hlc-bg-alt); }
 
 .hlc-add-btn { font-size: 1.1em; font-weight: bold; }
-.hlc-web-btn { font-size: 0.95em; }
 .hlc-btn-active { color: var(--hlc-accent) !important; }
 
 /* keep the old class working for anyone who targeted it directly */
